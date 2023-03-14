@@ -4,7 +4,7 @@ Hover, Signature and Completion support for Ansys APDL
 
 ## Features
 
-![feature X](images/example.png)
+![feature](images/feature.webp)
 
 ## Release Notes
 
