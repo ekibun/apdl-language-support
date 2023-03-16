@@ -1,5 +1,6 @@
 const cheerio = require('cheerio');
 const fs = require('fs');
+const path = require('path');
 const { helpBasePath } = require('./base.js');
 
 function parseElement(url) {
@@ -8,7 +9,8 @@ function parseElement(url) {
   const detail = $('div.refnamediv b.refpurpose').text().replace(/(\s|\n)+/g, ' ').trim();
   return {
     name,
-    detail
+    detail,
+    url: path.relative(helpBasePath, url).replace(/\\/g, '/'),
   };
 }
 
@@ -24,4 +26,4 @@ $('div.highlights > ul > li > a').toArray().forEach((v) => {
 
 console.log("\\\\b(?i)(" + ret.map((v) => v.name).join('|') + ")\\\\b");
 
-fs.writeFileSync('src/elements.json', JSON.stringify(ret));
+fs.writeFileSync('out/elements.json', JSON.stringify(ret));

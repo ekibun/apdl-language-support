@@ -78,7 +78,7 @@ function parseCommand(url) {
       match: k,
       detail: markdown(v, baseurl),
     }));
-    paramDetailsCur.detail = markdown(next.html(), baseurl);
+    paramDetailsCur.detail = markdown(next.contents().not('> div > div.variablelist').html(), baseurl);
     paramDetailsCur.index = lastbegin < 0 ? 0 : index < 0 ? lastbegin + 1 : index;
   });
   if (paramDetails.length === 0 && paramNames.length > 0) {
@@ -90,6 +90,7 @@ function parseCommand(url) {
     params: paramNames,
     detail,
     options: paramDetails,
+    url: path.relative(helpBasePath, url).replace(/\\/g, '/'),
   };
 }
 
@@ -98,10 +99,10 @@ for (let i = 'A'.charCodeAt(0); i <= 'Z'.charCodeAt(0); ++i) {
   const char = String.fromCharCode(i);
   ret.push.apply(ret, parseTOC(char));
 }
-fs.writeFileSync('src/commands.json', JSON.stringify(ret));
-fs.writeFileSync('src/test/commands.apdl', ret.map((v) => [v.name, ...v.params].join(',')).join('\n'));
+fs.writeFileSync('out/commands.json', JSON.stringify(ret));
+fs.writeFileSync('out/commands.apdl', ret.map((v) => [v.name, ...v.params].join(',')).join('\n'));
 
-fs.writeFileSync('commands.txt', "(?<=(\\\\$|^)\\\\s*)(?i)(" + ret.map((v) => v.name.replace('*', '\\\\*')).join('|') + ")(?=\\\\s*(,|$|\\\\$))");
+fs.writeFileSync('out/commands.txt', "(?<=(\\\\$|^)\\\\s*)(?i)(" + ret.map((v) => v.name.replace('*', '\\\\*')).join('|') + ")(?=\\\\s*(,|$|\\\\$))");
 
 // const ret = parseCommand('C:/Program Files/ANSYS Inc/v211/commonfiles/help/en-us/help/ans_cmd/Hlp_C_AN3D.html');
 // fs.writeFileSync('./extractor/test.md', ret.note);

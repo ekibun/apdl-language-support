@@ -6,6 +6,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.0.2] - 2023-03-16
+
+- Add help link
+
 ## [0.0.1] - 2023-03-14
 
 - Initial release

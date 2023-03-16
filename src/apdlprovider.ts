@@ -1,7 +1,11 @@
 import * as vscode from 'vscode';
-import functions = require('./functions.json');
-import commands = require('./commands.json');
-import elements = require('./elements.json');
+import path = require('path');
+import childProcess = require('child_process');
+import fs = require('fs');
+// import functions = require('./functions.json');
+// import commands = require('./commands.json');
+// import elements = require('./elements.json');
+
 
 function getFunctionName(line: string, position: vscode.Position): [string, boolean, number] {
   let paramindex = -1;
@@ -82,8 +86,6 @@ function getHoverWord(line: string, position: vscode.Position): any[] {
   return [wordBegin, wordEnd];
 }
 
-const baseUrl = 'C:/Program Files/ANSYS Inc/v211/commonfiles/help/en-us/';
-
 function getParamDoc(info: Command, paramIndex: number) {
   let cur = info.options ?? {};
   while (cur.next) {
@@ -97,15 +99,30 @@ function getParamDoc(info: Command, paramIndex: number) {
 
 export default class ApdlProvider implements vscode.HoverProvider, vscode.CompletionItemProvider, vscode.SignatureHelpProvider {
   lowerCase: boolean = false;
-  baseUrl = 'C:/Program Files/ANSYS Inc/v211/commonfiles/help/en-us/help/';
+  baseUrl = './';
+  contentUrl: vscode.Uri;
+  functions: { [name: string] : Command };
+  commands: Command[];
+  elements: Command[];
 
-  constructor() {
+  onLink(url: string) {
+    childProcess.exec(`start \"\" \"${path.join(this.baseUrl, url.split('#')[0])}\"`);
+  }
+
+  constructor(contentUrl: vscode.Uri) {
+    this.contentUrl = vscode.Uri.parse(contentUrl.toString() + '/out/');
+    this.functions = JSON.parse(fs.readFileSync(this.contentUrl.fsPath + '/functions.json').toString());
+    this.commands = JSON.parse(fs.readFileSync(this.contentUrl.fsPath + '/commands.json').toString());
+    this.elements = JSON.parse(fs.readFileSync(this.contentUrl.fsPath + '/elements.json').toString());
     this.updateConfiguration();
   }
 
   markdown(str: string | undefined) {
-    const markdown = new vscode.MarkdownString(str);
-    markdown.baseUri = vscode.Uri.file(this.baseUrl);
+    const markdown = new vscode.MarkdownString(str?.replace(/(?<!!)\[([^\]]+)\]\(([^)]+)\)/g, (_, content, url) => {
+      return `[${content}](command:ekibun.apdl-language-support.url?${encodeURIComponent(JSON.stringify(url.trim()))})`;
+    }));
+    markdown.isTrusted = true;
+    markdown.baseUri = this.contentUrl;
     markdown.supportHtml = false;
     return markdown;
   }
@@ -115,12 +132,13 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
     this.lowerCase = config.get("lowerCase") ?? this.lowerCase;
     this.baseUrl = config.get("baseurl") ?? this.baseUrl;
   }
+
   private getFunctionByName(name: string, isFunction: boolean, isCommand: boolean): Command | undefined {
     if (isFunction) {
-      return (functions as { [k: string]: Command })[name.toUpperCase()];
+      return (this.functions as { [k: string]: Command })[name.toUpperCase()];
     } else if (isCommand) {
       const abbrMinLen = /^\*|\//.test(name) ? 5 : 4;
-      return commands.find((v) => name.length >= abbrMinLen ? v.name.startsWith(name) : v.name === name);
+      return this.commands.find((v) => name.length >= abbrMinLen ? v.name.startsWith(name) : v.name === name);
     }
   }
 
@@ -140,7 +158,8 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
         new vscode.MarkdownString().appendCodeblock(
           isFunction ? `${funcName}(${functionInfo.params.join(',')})`
             : `${funcName},${functionInfo.params.join(',')}`, 'apdl'),
-        functionInfo.detail ?? ""
+        this.markdown(functionInfo.detail ?? ""),
+        this.markdown(`[HELP](${functionInfo.url})`),
       ]);
     }
   }
@@ -149,7 +168,7 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
     const line = document.lineAt(position.line).text;
     const commandCheck = /(?<=^|\$\s*)([\/\*])?([A-Z_][A-Z0-9_]*)?$/i.exec(line.substring(0, position.character));
     if (commandCheck) {
-      return commands.filter((v) =>
+      return this.commands.filter((v) =>
         commandCheck[1] ? v.name.startsWith(commandCheck[1]) : commandCheck[2] ? /^[A-Z_]/i.test(v.name) : true
       ).map((v) => {
         const name = this.lowerCase ? v.name.toLowerCase() : v.name;
@@ -157,7 +176,7 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
           label: name,
           kind: vscode.CompletionItemKind.Class,
           detail: [name, ...v.params].join(','),
-          documentation: v.detail,
+          documentation: this.markdown(`${v.detail}\n\n[HELP](${v.url})`),
           filterText: commandCheck[1] ? name.replace(/^[\/\*]/, '') : name,
           insertText: commandCheck[1] ? name.replace(/^[\/\*]/, '') : name,
         };
@@ -169,13 +188,13 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
         const functionInfo = this.getFunctionByName(name, false, true);
         if (functionInfo) {
           if (functionInfo.name === 'ET' && paramIndex === 1) {
-            ret.push.apply(ret, elements.map((v) => {
-              const name = this.lowerCase ? v.name.toLowerCase() : v.name;
+            ret.push.apply(ret, this.elements.map((v) => {
+              const name = this.lowerCase ? v.name!!.toLowerCase() : v.name!!;
               return {
                 label: name,
                 kind: vscode.CompletionItemKind.Enum,
                 detail: name,
-                documentation: v.detail ?? '',
+                documentation: this.markdown(`${v.detail}\n\n[HELP](${v.url})`),
                 filterText: name,
                 insertText: name,
                 sortText: '_' + name,
@@ -188,7 +207,7 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
                 label: name,
                 kind: vscode.CompletionItemKind.Enum,
                 detail: name,
-                documentation: v.detail ?? '',
+                documentation: this.markdown(v.detail ?? ""),
                 filterText: name,
                 insertText: name,
                 sortText: '_' + name,
@@ -197,13 +216,13 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
           }
         }
       }
-      ret.push.apply(ret, Object.entries(functions).map(([k, v]) => {
+      ret.push.apply(ret, Object.entries(this.functions).map(([k, v]) => {
         const name = this.lowerCase ? v.name.toLowerCase() : v.name;
         return {
           label: name,
           kind: vscode.CompletionItemKind.Function,
           detail: `${name}(${v.params.join(',')})`,
-          documentation: v.detail,
+          documentation: this.markdown(`${v.detail}\n\n[HELP](${v.url})`),
           filterText: name,
           insertText: name,
         };
@@ -225,7 +244,7 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
       ret.signatures = [
         {
           label: isFunction ? `${funcName}(${parameters.join(',')})` : `${funcName},${parameters.join(',')}`,
-          documentation: this.markdown(getParamDoc(functionInfo, paramIndex)?.detail),
+          documentation: this.markdown(`${getParamDoc(functionInfo, paramIndex)?.detail}\n\n[HELP](${functionInfo.url})`),
           parameters: parameters.map(v => ({
             label: v,
           })),

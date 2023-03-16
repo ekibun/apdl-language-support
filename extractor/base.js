@@ -1,10 +1,18 @@
 
 const path = require('path');
+const fs = require('fs');
+
+const helpBasePath = 'D:/App/ANSYS Inc/v211/commonfiles/help/en-us/help';
 
 module.exports = {
-  helpBasePath: 'C:/Program Files/ANSYS Inc/v211/commonfiles/help/en-us/help',
+  helpBasePath,
   markdown: function (html, baseurl) {
-    const wrapLink = (p) => path.join(baseurl ?? './', p).replace(/\\/g, '/');
+    const wrapLink = (p) => path.join(baseurl, p).replace(/\\/g, '/');
+    const wrapImage = (p) => {
+      const dist = path.join(baseurl, p).replace(/\\|\//g, '_');
+      fs.copyFileSync(path.join(helpBasePath, baseurl, p), path.join('./out', dist));
+      return dist;
+    };
     const linkStack = [];
     const divStack = [];
     let newline = false;
@@ -23,7 +31,7 @@ module.exports = {
             return '### ';
           case 'img':
             const matchImg = /\bsrc\s*=\s*\"([^\"]*)\"/.exec(p);
-            return matchImg ? `![](${wrapLink(matchImg[1])})` : '';
+            return matchImg ? `![](${wrapImage(matchImg[1])})` : '';
           case 'a':
             const matchLink = /\bhref\s*=\s*\"([^\"]*)\"/.exec(p);
             matchLink && linkStack.push(wrapLink(matchLink[1]));

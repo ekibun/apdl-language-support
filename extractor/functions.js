@@ -16,7 +16,8 @@ function parseFunctionTable(url, table) {
       arr[m[1]] = {
         name: m[1],
         detail: doc,
-        params: m[2].split(',').map((v) => v.trim())
+        params: m[2].split(',').map((v) => v.trim()),
+        url: path.relative(helpBasePath, url).replace(/\\/g, '/'),
       };
     }
     return arr;
@@ -29,7 +30,7 @@ const parametricFunctions = parseFunctionTable(`${helpBasePath}/ans_apdl/Hlp_P_A
 // help/ans_apdl/Hlp_P_APDLget.html
 const getFunctions = parseFunctionTable(`${helpBasePath}/ans_apdl/Hlp_P_APDLget.html`, 'div.table-contents table tbody tr');
 
-fs.writeFileSync('src/functions.json', JSON.stringify({
+fs.writeFileSync('out/functions.json', JSON.stringify({
   ...parametricFunctions,
   ...getFunctions,
 }));
