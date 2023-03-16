@@ -2,41 +2,41 @@ import * as vscode from 'vscode';
 import path = require('path');
 import childProcess = require('child_process');
 import fs = require('fs');
-// import functions = require('./functions.json');
-// import commands = require('./commands.json');
-// import elements = require('./elements.json');
 
+// 变量换行又不显示空格
+const JOINSTR = ',\u200b';
 
-function getFunctionName(line: string, position: vscode.Position): [string, boolean, number] {
-  let paramindex = -1;
+function getFunctionName(line: string, position: vscode.Position): [string, boolean, string[]] {
+  const params: string[] = [];
   let stack = 0;
   let lastComa = position.character;
   for (let i = position.character - 1; i >= 0; --i) {
     switch (line[i]) {
       case ',':
         if (stack <= 0) {
-          paramindex += 1;
+          params.splice(0, 0, line.slice(i + 1, lastComa).trim());
           lastComa = i;
         }
         break;
       case '$':
-        if (stack > 0) { return ['', false, paramindex]; }
-        const funcName = line.slice(i + 1, lastComa);
-        return [funcName, false, paramindex];
+        if (stack > 0) { return ['', false, params]; }
+        const funcName = line.slice(i + 1, lastComa).trim();
+        return [funcName, false, params];
       case ')':
         stack += 1;
         break;
       case '(':
         stack -= 1;
         if (stack < 0) {
-          const funcName = (/([a-z][a-z0-9_]*) *$/i.exec(line.slice(0, i)) ?? [])[1] ?? '';
-          return [funcName, true, paramindex + 1];
+          params.splice(0, 0, line.slice(i + 1, lastComa).trim());
+          const funcName = (/\b([a-z][a-z0-9_]*) *$/i.exec(line.slice(0, i)) ?? [])[1] ?? '';
+          return [funcName, true, params];
         }
         break;
     }
   }
-  const funcName = line.slice(0, lastComa);
-  return [funcName.toUpperCase(), false, paramindex];
+  const funcName = line.slice(0, lastComa).trim();
+  return [funcName.toUpperCase(), false, params];
 }
 
 function getHoverWord(line: string, position: vscode.Position): any[] {
@@ -86,22 +86,46 @@ function getHoverWord(line: string, position: vscode.Position): any[] {
   return [wordBegin, wordEnd];
 }
 
-function getParamDoc(info: Command, paramIndex: number) {
+/**
+ * 通过参数返回对应的文档
+ * @param info 
+ * @param params 
+ * @returns 
+ */
+function getParamDoc(info: Command, params: string[]): [OptionItem | undefined, string[]] {
+  const paramIndex = params.length - 1;
+  let curParams = [...info.params];
   let cur = info.options ?? {};
-  while (cur.next) {
-    if (cur.next.index!! > paramIndex) {
-      break;
+  while (true) {
+    if (cur.options) {
+      const param = params[cur.index ?? -1].toUpperCase();
+      const match = cur.options.find((v) => v.match === param);
+      if (match && match.next && (match.next.index ?? -1) <= paramIndex) {
+        if (match.params) {
+          curParams = curParams.slice(0, cur.index!! + 1).concat(match.params);
+          curParams[cur.index!!] = params[cur.index!!];
+        }
+        cur = match.next;
+        continue;
+      }
     }
-    cur = cur.next;
+    if (cur.next) {
+      if (cur.next.index!! > paramIndex) {
+        break;
+      }
+      cur = cur.next;
+      continue;
+    }
+    break;
   }
-  return cur;
+  return [cur, curParams];
 }
 
 export default class ApdlProvider implements vscode.HoverProvider, vscode.CompletionItemProvider, vscode.SignatureHelpProvider {
   lowerCase: boolean = false;
   baseUrl = './';
   contentUrl: vscode.Uri;
-  functions: { [name: string] : Command };
+  functions: { [name: string]: Command };
   commands: Command[];
   elements: Command[];
 
@@ -156,8 +180,8 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
       const funcName = this.lowerCase ? functionInfo.name.toLowerCase() : functionInfo.name;
       return new vscode.Hover([
         new vscode.MarkdownString().appendCodeblock(
-          isFunction ? `${funcName}(${functionInfo.params.join(',')})`
-            : `${funcName},${functionInfo.params.join(',')}`, 'apdl'),
+          isFunction ? `${funcName}(${functionInfo.params.join(JOINSTR)})`
+            : [funcName, ...functionInfo.params].join(JOINSTR), 'apdl'),
         this.markdown(functionInfo.detail ?? ""),
         this.markdown(`[HELP](${functionInfo.url})`),
       ]);
@@ -175,33 +199,33 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
         return {
           label: name,
           kind: vscode.CompletionItemKind.Class,
-          detail: [name, ...v.params].join(','),
-          documentation: this.markdown(`${v.detail}\n\n[HELP](${v.url})`),
+          detail: [name, ...v.params].join(JOINSTR),
+          documentation: this.markdown(`${v.detail ?? ''}\n\n[HELP](${v.url})`.trim()),
           filterText: commandCheck[1] ? name.replace(/^[\/\*]/, '') : name,
           insertText: commandCheck[1] ? name.replace(/^[\/\*]/, '') : name,
         };
       });
     } else {
-      const [name, isFunction, paramIndex] = getFunctionName(line, position);
+      const [name, isFunction, params] = getFunctionName(line, position);
       const ret: vscode.CompletionItem[] = [];
       if (!isFunction) {
         const functionInfo = this.getFunctionByName(name, false, true);
         if (functionInfo) {
-          if (functionInfo.name === 'ET' && paramIndex === 1) {
+          if (functionInfo.name === 'ET' && params.length === 2) {
             ret.push.apply(ret, this.elements.map((v) => {
               const name = this.lowerCase ? v.name!!.toLowerCase() : v.name!!;
               return {
                 label: name,
                 kind: vscode.CompletionItemKind.Enum,
                 detail: name,
-                documentation: this.markdown(`${v.detail}\n\n[HELP](${v.url})`),
+                documentation: this.markdown(`${v.detail ?? ''}\n\n[HELP](${v.url})`.trim()),
                 filterText: name,
                 insertText: name,
                 sortText: '_' + name,
               };
             }));
           } else {
-            ret.push.apply(ret, (getParamDoc(functionInfo, paramIndex)?.options ?? []).map((v) => {
+            ret.push.apply(ret, (getParamDoc(functionInfo, params)[0]?.options ?? []).map((v) => {
               const name = this.lowerCase ? v.match!.toLowerCase() : v.match!!;
               return {
                 label: name,
@@ -221,8 +245,8 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
         return {
           label: name,
           kind: vscode.CompletionItemKind.Function,
-          detail: `${name}(${v.params.join(',')})`,
-          documentation: this.markdown(`${v.detail}\n\n[HELP](${v.url})`),
+          detail: `${name}(${v.params.join(JOINSTR)})`,
+          documentation: this.markdown(`${v.detail ?? ''}\n\n[HELP](${v.url})`.trim()),
           filterText: name,
           insertText: name,
         };
@@ -233,18 +257,20 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
 
   provideSignatureHelp(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.SignatureHelpContext): vscode.ProviderResult<vscode.SignatureHelp> {
     const line = document.lineAt(position.line).text;
-    const [name, isFunction, paramIndex] = getFunctionName(line, position);
+    const [name, isFunction, params] = getFunctionName(line, position);
+    const paramIndex = params.length - 1;
     const functionInfo = this.getFunctionByName(name, isFunction, !isFunction);
     const ret = new vscode.SignatureHelp();
     if (functionInfo) {
       const funcName = this.lowerCase ? functionInfo.name.toLowerCase() : functionInfo.name;
-      const parameters = functionInfo.params?.map((v, i) => i === paramIndex ? v + '\u200b' : v) ?? [];
+      const [doc, _params] = getParamDoc(functionInfo, params);
+      const parameters = _params?.map((v, i) => i === paramIndex ? v + '\u200c' : v) ?? [];
       ret.activeParameter = paramIndex;
       ret.activeSignature = 0;
       ret.signatures = [
         {
-          label: isFunction ? `${funcName}(${parameters.join(',')})` : `${funcName},${parameters.join(',')}`,
-          documentation: this.markdown(`${getParamDoc(functionInfo, paramIndex)?.detail}\n\n[HELP](${functionInfo.url})`),
+          label: isFunction ? `${funcName}(${parameters.join(JOINSTR)})` : [funcName, ...parameters].join(JOINSTR),
+          documentation: this.markdown(`${doc?.detail ?? ''}\n\n[HELP](${functionInfo.url})`.trim()),
           parameters: parameters.map(v => ({
             label: v,
           })),

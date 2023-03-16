@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 const cheerio = require('cheerio');
 const assert = require('assert');
 const fs = require('fs');
@@ -36,6 +37,10 @@ function parseOptions(elem, $) {
   }
 }
 
+const specialCmds = {
+  '/AN3D': require('./special/an3d.js'),
+};
+
 function parseCommand(url) {
   const baseurl = path.dirname(path.relative(helpBasePath, url));
   const $ = cheerio.load(fs.readFileSync(url));
@@ -49,41 +54,46 @@ function parseCommand(url) {
       paramNames[typoIndex] = 'NPHI';
     }
   }
-  const paramNamesUpper = paramNames.map((v) => v.toUpperCase());
-  const paramDetailsDom = $('div.refsynopsisdiv, div[title="Argument Descriptions"]');
-  assert(paramDetailsDom.length < 2);
-
-  const paramDetails = {};
-  let paramDetailsCur = paramDetails;
-  paramDetailsDom.find('> div > div.variablelist > dl > dt').toArray().forEach((v) => {
-    const labels = $(v).find('em.replaceable').toArray().map((v) => $(v).text()).join(',').split(',').map((v) => v.trim()).filter((v) => v);
-    if (labels.length === 0) {
-      console.error(command);
-      return;
+  let paramDetails = {};
+  if (specialCmds[command]) {
+    paramDetails = specialCmds[command]($, baseurl, paramNames);
+  } else {
+    const paramNamesUpper = paramNames.map((v) => v.toUpperCase());
+    const paramDetailsDom = $('div.refsynopsisdiv, div[title="Argument Descriptions"]');
+    assert(paramDetailsDom.length < 2);
+    let paramDetailsCur = paramDetails;
+    paramDetailsDom.find('> div > div.variablelist > dl > dt').toArray().forEach((v) => {
+      const labels = $(v).find('em.replaceable').toArray().map((v) => $(v).text()).join(',').split(',').map((v) => v.trim()).filter((v) => v);
+      if (labels.length === 0) {
+        console.log(command);
+        return;
+      }
+      const paramUpper = labels[0].toUpperCase();
+      const lastbegin = paramDetailsCur.index ?? -1;
+      let index = paramNamesUpper.indexOf(paramUpper, lastbegin + 1);
+      if (index < 0) {
+        console.log(command, labels, paramNames[lastbegin]);
+      }
+      if (paramDetailsCur.index !== undefined) {
+        const newOption = {};
+        paramDetailsCur.next = newOption;
+        paramDetailsCur = newOption;
+      }
+      const next = $(v).next();
+      const options = parseOptions(next, $);
+      paramDetailsCur.options = options?.map(([k, v]) => ({
+        match: k,
+        detail: markdown(v, baseurl),
+      }));
+      paramDetailsCur.detail = markdown(next.contents().filter((i, el) => $(el).find('> div.variablelist').length === 0).html(), baseurl);
+      paramDetailsCur.index = lastbegin < 0 ? 0 : index < 0 ? lastbegin + 1 : index;
+    });
+    if (paramDetails.length === 0 && paramNames.length > 0) {
+      console.log(command, paramNames);
     }
-    const paramUpper = labels[0].toUpperCase();
-    const lastbegin = paramDetailsCur.index ?? -1;
-    let index = paramNamesUpper.indexOf(paramUpper, lastbegin + 1);
-    if (index < 0) {
-      console.log(command, labels, paramNames[lastbegin]);
-    }
-    if (paramDetailsCur.index !== undefined) {
-      const newOption = {};
-      paramDetailsCur.next = newOption;
-      paramDetailsCur = newOption;
-    }
-    const next = $(v).next();
-    const options = parseOptions(next, $);
-    paramDetailsCur.options = options?.map(([k, v]) => ({
-      match: k,
-      detail: markdown(v, baseurl),
-    }));
-    paramDetailsCur.detail = markdown(next.contents().not('> div > div.variablelist').html(), baseurl);
-    paramDetailsCur.index = lastbegin < 0 ? 0 : index < 0 ? lastbegin + 1 : index;
-  });
-  if (paramDetails.length === 0 && paramNames.length > 0) {
-    console.log(command, paramNames);
   }
+
+
   const detail = markdown($('div.refnamediv b.refpurpose').html(), baseurl);
   return {
     name: command,

@@ -2,7 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 
-const helpBasePath = 'D:/App/ANSYS Inc/v211/commonfiles/help/en-us/help';
+const helpBasePath = 'C:/Program Files/ANSYS Inc/v211/commonfiles/help/en-us/help';
 
 module.exports = {
   helpBasePath,

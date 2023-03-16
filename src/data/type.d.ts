@@ -11,6 +11,7 @@ type OptionItem = {
   index?: number,
   match?: string,
   detail?: string,
+  params?: string[],
   options?: OptionItem[],
   next?: OptionItem,
   prev?: OptionItem | undefined,
