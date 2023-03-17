@@ -6,6 +6,27 @@ const helpBasePath = 'C:/Program Files/ANSYS Inc/v211/commonfiles/help/en-us/hel
 
 module.exports = {
   helpBasePath,
+  parseOptions: function(elem, $) {
+    const vlist = elem.find('> div > div.variablelist');
+    if (vlist.length === 0) {
+      return;
+    }
+    // assert(vlist.length === 1);
+    const vlistdl = vlist.find('> dl > dt');
+    if (vlistdl.length > 0) {
+      return vlistdl.toArray().map((v) => ([
+        $(v).text().trim().replace(/\s*--\s*$/, ''),
+        $(v).next().html()
+      ]));
+    }
+    const vlistTable = vlist.find('> table > tbody > tr');
+    if (vlistTable.length > 0) {
+      return vlistTable.toArray().map((v) => ([
+        $(v).children().first().text().trim(),
+        $(v).children().last().html(),
+      ]));
+    }
+  },
   markdown: function (html, baseurl) {
     const wrapLink = (p) => path.join(baseurl, p).replace(/\\/g, '/');
     const wrapImage = (p) => {

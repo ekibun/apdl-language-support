@@ -15,4 +15,5 @@ type OptionItem = {
   options?: OptionItem[],
   next?: OptionItem,
   prev?: OptionItem | undefined,
+  url?: string,
 };

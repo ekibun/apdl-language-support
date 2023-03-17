@@ -39,53 +39,6 @@ function getFunctionName(line: string, position: vscode.Position): [string, bool
   return [funcName.toUpperCase(), false, params];
 }
 
-function getHoverWord(line: string, position: vscode.Position): any[] {
-  let wordFlag = false;
-  let wordBegin = -1;
-  let wordEnd = line.length;
-  for (let i = 0; i < line.length; ++i) {
-    const char = line[i].toUpperCase();
-    switch (char) {
-      case '!':
-        i = line.indexOf('$', i + 1);
-        if (i < 0) {
-          return [];
-        }
-        break;
-      case '"':
-        i = line.indexOf('"', i + 1);
-        if (i < 0) {
-          return [];
-        }
-        break;
-      case '\'':
-        i = line.indexOf('\'', i + 1);
-        if (i < 0) {
-          return [];
-        }
-        break;
-      default:
-        if (wordFlag) {
-          if (!/[A-Z0-9_]/.test(char)) {
-            wordFlag = false;
-            if (i >= position.character) {
-              wordEnd = i;
-              return [wordBegin, wordEnd];
-            }
-          }
-        } else if (i <= position.character) {
-          if (/[A-Z_\/\*]/.test(char)) {
-            wordFlag = true;
-            wordBegin = i;
-          }
-        } else {
-          return [];
-        }
-    }
-  }
-  return [wordBegin, wordEnd];
-}
-
 /**
  * 通过参数返回对应的文档
  * @param info 
@@ -118,6 +71,9 @@ function getParamDoc(info: Command, params: string[]): [OptionItem | undefined, 
     }
     break;
   }
+  if (cur.options && cur.index !== paramIndex) {
+    return [undefined, curParams];
+  }
   return [cur, curParams];
 }
 
@@ -127,7 +83,6 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
   contentUrl: vscode.Uri;
   functions: { [name: string]: Command };
   commands: Command[];
-  elements: Command[];
 
   onLink(url: string) {
     childProcess.exec(`start \"\" \"${path.join(this.baseUrl, url.split('#')[0])}\"`);
@@ -137,7 +92,6 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
     this.contentUrl = vscode.Uri.parse(contentUrl.toString() + '/out/');
     this.functions = JSON.parse(fs.readFileSync(this.contentUrl.fsPath + '/functions.json').toString());
     this.commands = JSON.parse(fs.readFileSync(this.contentUrl.fsPath + '/commands.json').toString());
-    this.elements = JSON.parse(fs.readFileSync(this.contentUrl.fsPath + '/elements.json').toString());
     this.updateConfiguration();
   }
 
@@ -168,8 +122,11 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
 
   provideHover(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken): vscode.ProviderResult<vscode.Hover> {
     const line = document.lineAt(position.line).text;
-    const [wordBegin, wordEnd] = getHoverWord(line, position);
-    if (wordBegin < 0) {
+    const wordBeginMatch = /(\/|\*)?\w*$/.exec(line.substring(0, position.character));
+    const wordEndMatch = /^\w*/.exec(line.substring(position.character));
+    const wordBegin = position.character - (wordBeginMatch ? wordBeginMatch[0].length : 0);
+    const wordEnd = position.character + (wordEndMatch ? wordEndMatch[0].length : 0);
+    if (wordBegin < 0 || wordEnd === wordBegin) {
       return;
     }
     const name = line.substring(wordBegin, wordEnd).toUpperCase();
@@ -185,6 +142,33 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
         this.markdown(functionInfo.detail ?? ""),
         this.markdown(`[HELP](${functionInfo.url})`),
       ]);
+    } else {
+      const [funcName, isFunction, params] = getFunctionName(line, position);
+      const functionInfo = this.getFunctionByName(funcName, isFunction, !isFunction);
+      if (functionInfo) {
+        params[params.length - 1] = name;
+        const [doc, _params] = getParamDoc(functionInfo, params);
+        if (doc) {
+          let detail = doc.detail ?? "";
+          let url = functionInfo.url ?? "";
+          if (doc.options) {
+            const param = name.toUpperCase();
+            const match = doc.options.find((v) => v.match === param);
+            if (match) {
+              detail = (detail + `\n\n**${match.match}** - ${match.detail}`).trim();
+              url = match.url ?? url;
+            }
+          }
+          if (_params.length >= params.length) {
+            _params[params.length - 1] = `[${_params[params.length - 1]}](a)`;
+          }
+          return new vscode.Hover([
+            this.markdown(detail),
+            this.markdown(`[HELP](${functionInfo.url})`),
+          ]);
+        }
+      }
+
     }
   }
 
@@ -211,33 +195,18 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
       if (!isFunction) {
         const functionInfo = this.getFunctionByName(name, false, true);
         if (functionInfo) {
-          if (functionInfo.name === 'ET' && params.length === 2) {
-            ret.push.apply(ret, this.elements.map((v) => {
-              const name = this.lowerCase ? v.name!!.toLowerCase() : v.name!!;
-              return {
-                label: name,
-                kind: vscode.CompletionItemKind.Enum,
-                detail: name,
-                documentation: this.markdown(`${v.detail ?? ''}\n\n[HELP](${v.url})`.trim()),
-                filterText: name,
-                insertText: name,
-                sortText: '_' + name,
-              };
-            }));
-          } else {
-            ret.push.apply(ret, (getParamDoc(functionInfo, params)[0]?.options ?? []).map((v) => {
-              const name = this.lowerCase ? v.match!.toLowerCase() : v.match!!;
-              return {
-                label: name,
-                kind: vscode.CompletionItemKind.Enum,
-                detail: name,
-                documentation: this.markdown(v.detail ?? ""),
-                filterText: name,
-                insertText: name,
-                sortText: '_' + name,
-              };
-            }));
-          }
+          ret.push.apply(ret, (getParamDoc(functionInfo, params)[0]?.options ?? []).map((v) => {
+            const name = this.lowerCase ? v.match!.toLowerCase() : v.match!!;
+            return {
+              label: name,
+              kind: vscode.CompletionItemKind.Enum,
+              detail: name,
+              documentation: this.markdown(v.detail ?? ""),
+              filterText: name,
+              insertText: name,
+              sortText: '_' + name,
+            };
+          }));
         }
       }
       ret.push.apply(ret, Object.entries(this.functions).map(([k, v]) => {

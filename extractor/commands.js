@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { helpBasePath, markdown } = require('./base.js');
+const { helpBasePath, parseOptions, markdown } = require('./base.js');
 
 function parseTOC(char) {
   const url =
@@ -15,30 +15,13 @@ function parseTOC(char) {
   ));
 }
 
-function parseOptions(elem, $) {
-  const vlist = elem.find('> div > div.variablelist');
-  if (vlist.length === 0) {
-    return;
-  }
-  // assert(vlist.length === 1);
-  const vlistdl = vlist.find('> dl > dt');
-  if (vlistdl.length > 0) {
-    return vlistdl.toArray().map((v) => ([
-      $(v).text().trim().replace(/\s*--\s*$/, ''),
-      $(v).next().html()
-    ]));
-  }
-  const vlistTable = vlist.find('> table > tbody > tr');
-  if (vlistTable.length > 0) {
-    return vlistTable.toArray().map((v) => ([
-      $(v).children().first().text().trim(),
-      $(v).children().last().html(),
-    ]));
-  }
-}
-
 const specialCmds = {
   '/AN3D': require('./special/an3d.js'),
+  'SECMODIF': require('./special/an3d.js'),
+  '*DMAT': require('./special/dmat.js'),
+  '*SMAT': require('./special/dmat.js'),
+  '*VEC': require('./special/dmat.js'),
+  'ET': require('./special/et.js'),
 };
 
 function parseCommand(url) {
@@ -46,7 +29,7 @@ function parseCommand(url) {
   const $ = cheerio.load(fs.readFileSync(url));
   const command = $('div.refnamediv span.command').text();
   // console.log(command);
-  const paramNames = $('div.refnamediv em.replaceable').toArray().map((v) => $(v).text().trim());
+  const paramNames = markdown($('div.refnamediv > p').first().html(), baseurl).split('\n')[0].split(',').slice(1).map((v) => v.trim());
   if (command === 'PLFAR' || command === 'PRFAR') {
     console.log(command, ['NPHI'], 'NPH1<FIXED>');
     const typoIndex = paramNames.indexOf('NPH1');
@@ -54,54 +37,82 @@ function parseCommand(url) {
       paramNames[typoIndex] = 'NPHI';
     }
   }
-  let paramDetails = {};
-  if (specialCmds[command]) {
-    paramDetails = specialCmds[command]($, baseurl, paramNames);
-  } else {
-    const paramNamesUpper = paramNames.map((v) => v.toUpperCase());
-    const paramDetailsDom = $('div.refsynopsisdiv, div[title="Argument Descriptions"]');
-    assert(paramDetailsDom.length < 2);
-    let paramDetailsCur = paramDetails;
-    paramDetailsDom.find('> div > div.variablelist > dl > dt').toArray().forEach((v) => {
-      const labels = $(v).find('em.replaceable').toArray().map((v) => $(v).text()).join(',').split(',').map((v) => v.trim()).filter((v) => v);
-      if (labels.length === 0) {
-        console.log(command);
-        return;
-      }
-      const paramUpper = labels[0].toUpperCase();
-      const lastbegin = paramDetailsCur.index ?? -1;
-      let index = paramNamesUpper.indexOf(paramUpper, lastbegin + 1);
-      if (index < 0) {
-        console.log(command, labels, paramNames[lastbegin]);
-      }
-      if (paramDetailsCur.index !== undefined) {
-        const newOption = {};
-        paramDetailsCur.next = newOption;
-        paramDetailsCur = newOption;
-      }
-      const next = $(v).next();
-      const options = parseOptions(next, $);
-      paramDetailsCur.options = options?.map(([k, v]) => ({
-        match: k,
-        detail: markdown(v, baseurl),
-      }));
-      paramDetailsCur.detail = markdown(next.contents().filter((i, el) => $(el).find('> div.variablelist').length === 0).html(), baseurl);
-      paramDetailsCur.index = lastbegin < 0 ? 0 : index < 0 ? lastbegin + 1 : index;
-    });
-    if (paramDetails.length === 0 && paramNames.length > 0) {
-      console.log(command, paramNames);
+  if (command === 'CM') {
+    console.log(command, ['KOPT'], 'KOPOT<FIXED>');
+    const typoIndex = paramNames.indexOf('KOPOT');
+    if (typoIndex >= 0) {
+      paramNames[typoIndex] = 'KOPT';
     }
   }
-
-
   const detail = markdown($('div.refnamediv b.refpurpose').html(), baseurl);
-  return {
+  // 基本参数处理
+  const paramDetails = {};
+  const paramNamesUpper = paramNames.map((v) => v.toUpperCase());
+  const paramDetailsDom = $('div.refsynopsisdiv, div[title="Argument Descriptions"]');
+  assert(paramDetailsDom.length < 2);
+  let paramDetailsCur = paramDetails;
+  paramDetailsDom.find('> div > div.variablelist > dl > dt').toArray().forEach((v) => {
+    const labels = $(v).find('em.replaceable').toArray().map((v) => $(v).text()).join(',').split(',').map((v) => v.trim()).filter((v) => v);
+    if (labels.length === 0) {
+      labels[0] = $(v).text();
+      console.log(command, labels[0]);
+    }
+    const paramUpper = labels[0].toUpperCase();
+    const lastbegin = paramDetailsCur.index ?? -1;
+    let index = paramNamesUpper.indexOf(paramUpper, lastbegin + 1);
+    if (index < 0) {
+      console.log(command, labels, paramNames[lastbegin + 1]);
+    }
+    if (paramDetailsCur.index !== undefined) {
+      const newOption = {};
+      paramDetailsCur.next = newOption;
+      paramDetailsCur = newOption;
+    }
+    const next = $(v).next();
+    const options = parseOptions(next, $);
+    paramDetailsCur.options = options?.map(([k, v]) => ({
+      match: k,
+      detail: markdown(v, baseurl),
+    }));
+    const $detail = cheerio.load(next.html());
+    $detail('body > div > div.variablelist , body > table > tbody > tr').remove();
+    paramDetailsCur.detail = markdown($detail.html(), baseurl);
+    paramDetailsCur.index = lastbegin < 0 ? 0 : index < 0 ? lastbegin + 1 : index;
+  });
+  if (paramDetails.length === 0 && paramNames.length > 0) {
+    console.log(command, paramNames);
+  }
+  // TODO
+  if (['*INIT', '*MERGE', '*REMOVE', '*SORT'].includes(command)) {
+    let options = paramDetails;
+    while (paramNames[options.index] !== 'Val1') {
+      options = options.next;
+    }
+    options.next = undefined;
+    console.log(`${command}<FIXED>`);
+  }
+  if (['CNCHECK'].includes(command)) {
+    let options = paramDetails;
+    while (paramNames[options.index] !== 'Val1') {
+      options = options.next;
+    }
+    options.next = undefined;
+    const p = $('div.refsynopsisdiv > p');
+    options.detail = markdown(p.html(), baseurl);
+    console.log(`${command}<FIXED>`);
+  }
+  const ret = {
     name: command,
     params: paramNames,
     detail,
     options: paramDetails,
-    url: path.relative(helpBasePath, url).replace(/\\/g, '/'),
-  };
+    url: path.relative(helpBasePath, url).replace(/\\/g, '/')
+  }
+  if (specialCmds[command]) {
+    return specialCmds[command]($, baseurl, ret);
+  } else {
+    return ret;
+  }
 }
 
 const ret = [];
