@@ -2,7 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 
-const helpBasePath = 'C:/Program Files/ANSYS Inc/v211/commonfiles/help/en-us/help';
+const helpBasePath = 'D:/App/ANSYS Inc/v211/commonfiles/help/en-us/help';
 
 module.exports = {
   helpBasePath,
@@ -61,8 +61,9 @@ module.exports = {
             const link = linkStack.pop();
             return link ? `](${link})` : '';
           case 'b':
+            return ' **';
           case '/b':
-            return '**';
+            return '** ';
           case 'tr':
           case '/tr':
           case 'p':

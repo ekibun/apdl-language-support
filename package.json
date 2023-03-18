@@ -1,8 +1,9 @@
 {
   "name": "apdl-language-support",
-  "displayName": "apdl-language-support",
+  "displayName": "APDL Language Support",
   "description": "Hover, Signature and Completion support for Ansys APDL",
-  "version": "0.0.3",
+  "version": "0.1.0",
+  "icon": "LanguageAPDL_color_128x.png",
   "engines": {
     "vscode": "^1.76.0"
   },
@@ -18,17 +19,17 @@
   "contributes": {
     "configuration": [
       {
-        "title": "APDL配置",
+        "title": "APDL configuration",
         "properties": {
           "ekibun.apdl-language-support.lowerCase": {
             "type": "boolean",
             "default": false,
-            "description": "小写"
+            "description": "Show command in lower case"
           },
           "ekibun.apdl-language-support.baseurl": {
             "type": "string",
-            "default": "C:/Program Files/ANSYS Inc/v211/commonfiles/help/en-us/help/",
-            "description": "帮助文件路径"
+            "default": "https://ansyshelp.ansys.com/account/Secured?returnurl=/Views/Secured/corp/v211/en/",
+            "description": "Path to the ansys help"
           }
         }
       }
@@ -41,14 +42,13 @@
           "apdl"
         ],
         "extensions": [
-          ".in",
-          ".out",
-          ".inp",
           ".mac",
           ".ans",
+          ".apdl",
+          ".ansys",
+          ".ans.txt",
           ".apdl.txt",
-          "apdl",
-          "ansys"
+          ".ansys.txt"
         ],
         "configuration": "./language-configuration.json"
       }

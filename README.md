@@ -1,6 +1,6 @@
-# apdl-language-support README
+# APDL Language Support for Visual Studio Code
 
-Hover, Signature and Completion support for Ansys APDL
+This plugin provides Hover, Signature and Completion language support for Ansys APDL to Visual Studio Code.
 
 ## Features
 
@@ -10,13 +10,13 @@ Hover, Signature and Completion support for Ansys APDL
 
 - [x] Support all commands and functions in Ansys 2021
 - [x] List Elements in `ET` command
-- [x] Open Local Help Files
-- [ ] Open Online Help
-- [ ] Fix `Subtype` in `SECTYPE` command
-- [ ] Fix Enum Options for `*GET` command
+- [x] Open Local/Online Help Files
+- [x] Fix `Subtype` in `SECTYPE` command
+- [x] Fix Enum Options for `*GET` command
 - [ ] Variable Semantic Support
-- [ ] Show Element Key Infomation for `KEYOPT`
-- [ ] Show Section Infomation for `SECDATA`
+- [ ] Show Element Key Infomation for `KEYOPT` command
+- [ ] Show Element Real constant Infomation for `R` command
+- [ ] Show Section Infomation for `SECDATA` command
 
 ## Release Notes
 

@@ -85,7 +85,8 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
   commands: Command[];
 
   onLink(url: string) {
-    childProcess.exec(`start \"\" \"${path.join(this.baseUrl, url.split('#')[0])}\"`);
+    const urlwrap = /^https?:/.test(this.baseUrl) ? this.baseUrl + url : path.join(this.baseUrl, url.split('#')[0]);
+    childProcess.exec(`start \"\" \"${urlwrap}\"`);
   }
 
   constructor(contentUrl: vscode.Uri) {
@@ -164,7 +165,7 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
           }
           return new vscode.Hover([
             this.markdown(detail),
-            this.markdown(`[HELP](${functionInfo.url})`),
+            this.markdown(`[HELP](${url})`),
           ]);
         }
       }

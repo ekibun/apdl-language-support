@@ -22,6 +22,8 @@ const specialCmds = {
   '*SMAT': require('./special/dmat.js'),
   '*VEC': require('./special/dmat.js'),
   'ET': require('./special/et.js'),
+  'SECTYPE': require('./special/sectype.js'),
+  '*GET': require('./special/get.js'),
 };
 
 function parseCommand(url) {
@@ -123,7 +125,49 @@ for (let i = 'A'.charCodeAt(0); i <= 'Z'.charCodeAt(0); ++i) {
 fs.writeFileSync('out/commands.json', JSON.stringify(ret));
 fs.writeFileSync('out/commands.apdl', ret.map((v) => [v.name, ...v.params].join(',')).join('\n'));
 
-fs.writeFileSync('out/commands.txt', "(?<=(\\\\$|^)\\\\s*)(?i)(" + ret.map((v) => v.name.replace('*', '\\\\*')).join('|') + ")(?=\\\\s*(,|$|\\\\$))");
+// help/ans_ope/Hlp_G_OPE2_12.html
+const trieTree = {};
+ret.forEach((v) => {
+
+  const words = [v.name];
+  const testlen = /^(\/|\*)/.test(v.name) ? 5 : 4;
+  for (let i = v.name.length - 1; i >= testlen; --i) {
+    words.push(v.name.slice(0, i));
+  }
+  for (let word of words) {
+    let node = trieTree;
+    for (let char of word) {
+      if (!node[char]) {
+        node[char] = {};
+      }
+      node = node[char];
+    }
+    node[""] = 1;
+  }
+});
+
+function genReg(tree) {
+  console.log(tree);
+  const keys = Object.keys(tree);
+  let ret = "";
+  const indexEOF = keys.indexOf("");
+  if (indexEOF >= 0) {
+    keys.splice(indexEOF, 1);
+    ret = "?"
+  }
+  if (keys.length === 0) {
+    return '';
+  } else if (keys.length === 1 && indexEOF < 0) {
+    ret = keys[0] + genReg(tree[keys[0]]);
+  } else {
+    ret = '(?:' + keys.map((k) => k + genReg(tree[k])).join("|") + ")" + ret;
+  }
+  return ret;
+}
+// fs.writeFileSync('out/commands.txt', "(?<=(\\\\$|^)\\\\s*)(?i)(" + ret.map((v) => v.name.replace('*', '\\\\*')).join('|') + ")(?=\\\\s*(,|$|\\\\$))");
+
+fs.writeFileSync('out/commands.txt', "(?<=(\\\\$|^)\\\\s*)(?i)" + genReg(trieTree).replace(/\*/g, '\\\\*') + "(?=\\\\s*(,|$|\\\\$))");
+
 
 // const ret = parseCommand('C:/Program Files/ANSYS Inc/v211/commonfiles/help/en-us/help/ans_cmd/Hlp_C_AN3D.html');
 // fs.writeFileSync('./extractor/test.md', ret.note);

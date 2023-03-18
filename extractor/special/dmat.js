@@ -49,7 +49,6 @@ module.exports = function ($, baseurl, cmd) {
                 detail: detail?.trim(),
               };
             });
-            console.log(option);
             $(tds[i]).find('> table').remove();
             const next = {
               index: optionNext.index + i + 1,
