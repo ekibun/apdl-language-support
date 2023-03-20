@@ -3,3 +3,4 @@ dist
 node_modules
 .vscode-test/
 *.vsix
+LanguageAPDL_color_128x.psd

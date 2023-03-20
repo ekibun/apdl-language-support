@@ -24,6 +24,7 @@ const specialCmds = {
   'ET': require('./special/et.js'),
   'SECTYPE': require('./special/sectype.js'),
   '*GET': require('./special/get.js'),
+  'F': require('./special/f.js'),
 };
 
 function parseCommand(url) {
@@ -77,7 +78,9 @@ function parseCommand(url) {
       detail: markdown(v, baseurl),
     }));
     const $detail = cheerio.load(next.html());
-    $detail('body > div > div.variablelist , body > table > tbody > tr').remove();
+    if(options) {
+      $detail('body > div > div.variablelist , body > table > tbody > tr').remove();
+    }
     paramDetailsCur.detail = markdown($detail.html(), baseurl);
     paramDetailsCur.index = lastbegin < 0 ? 0 : index < 0 ? lastbegin + 1 : index;
   });
@@ -122,6 +125,12 @@ for (let i = 'A'.charCodeAt(0); i <= 'Z'.charCodeAt(0); ++i) {
   const char = String.fromCharCode(i);
   ret.push.apply(ret, parseTOC(char));
 }
+// help/ans_arch/archlegacycommands.html
+const $arch = cheerio.load(fs.readFileSync(`${helpBasePath}/ans_arch/archlegacycommands.html`));
+$arch('div.highlights > ul > li > a').toArray().forEach((v) => {
+  ret.push(parseCommand(`${helpBasePath}/ans_arch/${v.attribs['href']}`));
+});
+
 fs.writeFileSync('out/commands.json', JSON.stringify(ret));
 fs.writeFileSync('out/commands.apdl', ret.map((v) => [v.name, ...v.params].join(',')).join('\n'));
 
@@ -147,7 +156,6 @@ ret.forEach((v) => {
 });
 
 function genReg(tree) {
-  console.log(tree);
   const keys = Object.keys(tree);
   let ret = "";
   const indexEOF = keys.indexOf("");
@@ -166,7 +174,7 @@ function genReg(tree) {
 }
 // fs.writeFileSync('out/commands.txt', "(?<=(\\\\$|^)\\\\s*)(?i)(" + ret.map((v) => v.name.replace('*', '\\\\*')).join('|') + ")(?=\\\\s*(,|$|\\\\$))");
 
-fs.writeFileSync('out/commands.txt', "(?<=(\\\\$|^)\\\\s*)(?i)" + genReg(trieTree).replace(/\*/g, '\\\\*') + "(?=\\\\s*(,|$|\\\\$))");
+fs.writeFileSync('out/commands.txt', "(?<=(\\\\$|^)\\\\s*)(?i)" + genReg(trieTree).replace(/\*/g, '\\\\*') + "(?=\\\\s*(,|!|$|\\\\$))");
 
 
 // const ret = parseCommand('C:/Program Files/ANSYS Inc/v211/commonfiles/help/en-us/help/ans_cmd/Hlp_C_AN3D.html');

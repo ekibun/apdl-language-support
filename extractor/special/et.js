@@ -24,6 +24,11 @@ function getElements() {
     }
     ret.push(parseElement(`${helpBasePath}/ans_elem/${v.attribs['href']}`));
   });
+  // help/ans_arch/archlegacyelements.html
+  const $arch = cheerio.load(fs.readFileSync(`${helpBasePath}/ans_arch/archlegacyelements.html`));
+  $arch('div.highlights > ul > li > a').toArray().forEach((v) => {
+    ret.push(parseElement(`${helpBasePath}/ans_arch/${v.attribs['href']}`));
+  });
   return ret;
 }
 

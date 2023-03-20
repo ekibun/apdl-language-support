@@ -6,6 +6,10 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.1] - 2023-03-20
+
+- Add archived commands and elements
+
 ## [0.1.0] - 2023-03-18
 
 - Fix some command

@@ -10,7 +10,11 @@ export function activate(context: vscode.ExtensionContext) {
 	const APDL_SEL: vscode.DocumentSelector = { scheme: 'file', language: 'apdl' };
 	const provider = new ApdlProvider(context.extensionUri);
 
-	vscode.workspace.onDidChangeConfiguration(() => provider.updateConfiguration());
+	context.subscriptions.push(
+		vscode.workspace.onDidChangeConfiguration(
+			() => provider.updateConfiguration()
+		)
+	);
 	context.subscriptions.push(
 		vscode.commands.registerCommand("ekibun.apdl-language-support.url", (url: string) => {
 			provider.onLink(url);
