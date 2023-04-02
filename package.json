@@ -2,7 +2,7 @@
   "name": "apdl-language-support",
   "displayName": "APDL Language Support",
   "description": "Hover, Signature and Completion support for Ansys APDL",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "icon": "LanguageAPDL_color_128x.png",
   "engines": {
     "vscode": "^1.76.0"
@@ -36,6 +36,10 @@
     ],
     "languages": [
       {
+        "icon": {
+          "dark": "./icons/ansys_dark.svg",
+          "light": "./icons/ansys_light.svg"
+        },
         "id": "apdl",
         "aliases": [
           "Ansys APDL",

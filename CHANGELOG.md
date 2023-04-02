@@ -6,6 +6,11 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.2] - 2023-04-02
+
+- Update commands for Ansys 2023R1
+- add icon files for apdl
+
 ## [0.1.1] - 2023-03-20
 
 - Add archived commands and elements

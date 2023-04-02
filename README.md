@@ -8,7 +8,7 @@ This plugin provides Hover, Signature and Completion language support for Ansys 
 
 ## TODO
 
-- [x] Support all commands and functions in Ansys 2021
+- [x] Support all commands and functions in Ansys 2023R1
 - [x] List Elements in `ET` command
 - [x] Open Local/Online Help Files
 - [x] Fix `Subtype` in `SECTYPE` command

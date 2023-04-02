@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import path = require('path');
-import childProcess = require('child_process');
 import fs = require('fs');
 
 // 变量换行又不显示空格
@@ -85,8 +84,8 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
   commands: Command[];
 
   onLink(url: string) {
-    const urlwrap = /^https?:/.test(this.baseUrl) ? this.baseUrl + url : path.join(this.baseUrl, url.split('#')[0]);
-    childProcess.exec(`start \"\" \"${urlwrap}\"`);
+    const urlwrap = /^https?:/.test(this.baseUrl) ? vscode.Uri.parse(this.baseUrl + url) : vscode.Uri.file(path.join(this.baseUrl, url.split('#')[0]));
+    vscode.env.openExternal(urlwrap);
   }
 
   constructor(contentUrl: vscode.Uri) {
