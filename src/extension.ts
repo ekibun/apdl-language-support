@@ -11,6 +11,12 @@ export function activate(context: vscode.ExtensionContext) {
 	const provider = new ApdlProvider(context.extensionUri);
 
 	context.subscriptions.push(
+		vscode.languages.registerDocumentSemanticTokensProvider(
+			APDL_SEL, provider, provider.legend
+		)
+	);
+	context.subscriptions.push(provider.diagnotics);
+	context.subscriptions.push(
 		vscode.workspace.onDidChangeConfiguration(
 			() => provider.updateConfiguration()
 		)

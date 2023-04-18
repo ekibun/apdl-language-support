@@ -6,6 +6,13 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+- Semantic Tokens
+- Diagnotics
+
+## [0.1.3] - 2023-04-18
+
+- Fix completion when command starting with blanks
+
 ## [0.1.2] - 2023-04-02
 
 - Update commands for Ansys 2023R1

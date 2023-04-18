@@ -76,12 +76,15 @@ function getParamDoc(info: Command, params: string[]): [OptionItem | undefined, 
   return [cur, curParams];
 }
 
-export default class ApdlProvider implements vscode.HoverProvider, vscode.CompletionItemProvider, vscode.SignatureHelpProvider {
+export default class ApdlProvider implements vscode.HoverProvider, vscode.CompletionItemProvider, vscode.SignatureHelpProvider, vscode.DocumentSemanticTokensProvider {
   lowerCase: boolean = false;
   baseUrl = './';
   contentUrl: vscode.Uri;
   functions: { [name: string]: Command };
   commands: Command[];
+
+  legend = new vscode.SemanticTokensLegend(['variable', 'enum']);
+  diagnotics = vscode.languages.createDiagnosticCollection('apdl');
 
   onLink(url: string) {
     const urlwrap = /^https?:/.test(this.baseUrl) ? vscode.Uri.parse(this.baseUrl + url) : vscode.Uri.file(path.join(this.baseUrl, url.split('#')[0]));
@@ -93,6 +96,79 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
     this.functions = JSON.parse(fs.readFileSync(this.contentUrl.fsPath + '/functions.json').toString());
     this.commands = JSON.parse(fs.readFileSync(this.contentUrl.fsPath + '/commands.json').toString());
     this.updateConfiguration();
+  }
+
+  async provideDocumentSemanticTokens(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.SemanticTokens | undefined> {
+    const builder = new vscode.SemanticTokensBuilder(this.legend);
+    const errors: vscode.Diagnostic[] = [];
+    for (let l = 0; l < document.lineCount; ++l) {
+      // check every 100 lines
+      if (l % 100 === 0) {
+        await new Promise((res) => setImmediate(res));
+        if (token.isCancellationRequested) return;
+      }
+      const line = document.lineAt(l).text;
+      let isBegin = true;
+      let lastComa = -1;
+      const commands: any[] = [];
+      const updateComa = (i: number) => {
+        if(lastComa >= i) return;
+        const value = line.slice(lastComa + 1, i);
+        if (isBegin) {
+          isBegin = false;
+          const command = this.getFunctionByName(value.trim().toUpperCase(), false, true);
+          if (!command && value.trim()) {
+            errors.push({
+              range: new vscode.Range(l, lastComa + 1, l, i),
+              message: '(APDL) Unknown Command',
+              severity: vscode.DiagnosticSeverity.Warning
+            });
+            commands.splice(0, commands.length, command);
+          }
+        } else {
+          commands.push(value);
+        }
+        lastComa = i;
+      }
+      for (let i = 0; i < line.length; ++i) {  
+        switch (line[i]) {
+          case ',':
+            updateComa(i);
+            break;
+          case '=':
+            if (isBegin) {
+              isBegin = false;
+              builder.push(l, lastComa + 1, i - lastComa - 1, 0);
+              lastComa = i;
+            } else {
+              errors.push({
+                range: new vscode.Range(l, i, l, i + 1),
+                message: '(APDL) Unexpected character: =',
+                severity: vscode.DiagnosticSeverity.Warning
+              });
+            }
+            break;
+          case '$':
+            isBegin = true;
+            break;
+          case '"':
+          case "'":
+            i = line.indexOf(line[i], i + 1);
+            if (i < 0) {
+              i = line.length;
+            }
+            break;
+          case '!':
+            updateComa(i);
+            i = line.length;
+            lastComa = i;
+            break;
+        }
+      }
+      updateComa(line.length);
+    }
+    this.diagnotics.set(document.uri, errors);
+    return builder.build();
   }
 
   markdown(str: string | undefined) {
@@ -130,10 +206,11 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
       return;
     }
     const name = line.substring(wordBegin, wordEnd).toUpperCase();
-    const isCommand = /(^|\$)\s*$/.test(line.substring(0, wordBegin));
+    const isCommand = /(^|\$)\s*$/.test(line.substring(0, wordBegin)) && /^\s*(,|$|\$)/.test(line.substring(wordEnd));
     const isFunction = /^\s*\(/.test(line.substring(wordEnd));
-    const functionInfo = this.getFunctionByName(name, isFunction, isCommand);
-    if (functionInfo) {
+    if (isCommand || isFunction) {
+      const functionInfo = this.getFunctionByName(name, isFunction, isCommand);
+      if (!functionInfo) return;
       const funcName = this.lowerCase ? functionInfo.name.toLowerCase() : functionInfo.name;
       return new vscode.Hover([
         new vscode.MarkdownString().appendCodeblock(
@@ -174,7 +251,7 @@ export default class ApdlProvider implements vscode.HoverProvider, vscode.Comple
 
   provideCompletionItems(document: vscode.TextDocument, position: vscode.Position, token: vscode.CancellationToken, context: vscode.CompletionContext): vscode.ProviderResult<vscode.CompletionItem[] | vscode.CompletionList<vscode.CompletionItem>> {
     const line = document.lineAt(position.line).text;
-    const commandCheck = /(?<=^|\$\s*)([\/\*])?([A-Z_][A-Z0-9_]*)?$/i.exec(line.substring(0, position.character));
+    const commandCheck = /(?<=(^|\$)\s*)([\/\*])?([A-Z_][A-Z0-9_]*)?$/i.exec(line.substring(0, position.character));
     if (commandCheck) {
       return this.commands.filter((v) =>
         commandCheck[1] ? v.name.startsWith(commandCheck[1]) : commandCheck[2] ? /^[A-Z_]/i.test(v.name) : true
